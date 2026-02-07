@@ -897,7 +897,7 @@ function generateSeriesKeyboard(movie, page = 0) {
     const currentEps = movie.episodes.slice(start, end);
 
     const epButtons = currentEps.map(ep => ({
-        text: `${ep.number}`,
+        text: `${ep.number}-qism`,
         callback_data: `s_dl_${movie.code}_${ep.number}`
     }));
 
