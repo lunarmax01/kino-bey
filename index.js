@@ -418,7 +418,7 @@ async function handleAdminInput(chatId, msg) {
 
                 const finalData = { code, ...st.data, addedBy: chatId, contentType: st.contentType };
                 if (st.contentType === 'series') {
-                    finalData.episodes = [{ number: 1, fileId: st.data.fileId, name: '1-qism' }];
+                    finalData.episodes = [{ number: 1, fileId: st.data.fileId, name: '1' }];
                     delete finalData.fileId;
                 }
                 const movie = await Movie.create(finalData);
