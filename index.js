@@ -897,7 +897,7 @@ function generateSeriesKeyboard(movie, page = 0) {
     const currentEps = movie.episodes.slice(start, end);
 
     const epButtons = currentEps.map(ep => ({
-        text: `${ep.number}-qism`,
+        text: `${ep.number}`,
         callback_data: `s_dl_${movie.code}_${ep.number}`
     }));
 
@@ -905,7 +905,7 @@ function generateSeriesKeyboard(movie, page = 0) {
     let tempRow = [];
     for (let i = 0; i < epButtons.length; i++) {
         tempRow.push(epButtons[i]);
-        if (tempRow.length === 3 || i === epButtons.length - 1) {
+        if (tempRow.length === 5 || i === epButtons.length - 1) {
             rows.push(tempRow);
             tempRow = [];
         }
@@ -913,10 +913,10 @@ function generateSeriesKeyboard(movie, page = 0) {
 
     const navRow = [];
     if (page > 0) {
-        navRow.push({ text: "⬅️ Oldingi", callback_data: `s_nav_${movie.code}_${page - 1}` });
+        navRow.push({ text: "⬅️", callback_data: `s_nav_${movie.code}_${page - 1}` });
     }
     if (end < totalEps) {
-        navRow.push({ text: "Keyingi ➡️", callback_data: `s_nav_${movie.code}_${page + 1}` });
+        navRow.push({ text: "➡️", callback_data: `s_nav_${movie.code}_${page + 1}` });
     }
 
     const ratingRow = [1, 2, 3, 4, 5].map(r => ({ text: `${r}⭐️`, callback_data: `rate_${movie.code}_${r}` }));
@@ -932,33 +932,56 @@ function generateSeriesKeyboard(movie, page = 0) {
 }
 
 async function showMovieCard(chatId, code, user) {
-    const movie = await Movie.findOne({ code: parseInt(code) });
-    if (!movie) return safeSend(chatId, "❌ <b>Topilmadi.</b> Kod noto'g'ri.", { parse_mode: 'HTML' });
+    try {
+        const movie = await Movie.findOneAndUpdate(
+            { code: parseInt(code) },
+            { $inc: { views: 1 } },
+            { new: true }
+        );
 
-    Movie.updateOne({ code: parseInt(code) }, { $inc: { views: 1 } }).exec();
+        if (!movie) {
+            return safeSend(chatId, "❌ <b>Topilmadi.</b> Kod noto'g'ri.", { parse_mode: 'HTML' });
+        }
 
-    const rating = movie.ratingCount > 0 ? (movie.ratingSum / movie.ratingCount).toFixed(1) : "0";
-    const typeText = movie.contentType === 'series' ? '📺 SERIAL' : '🎬 KINO';
+        const rating = movie.ratingCount > 0 ? (movie.ratingSum / movie.ratingCount).toFixed(1) : "0";
+        const typeText = movie.contentType === 'series' ? '📺 SERIAL' : '🎬 KINO';
 
-    let caption = `${typeText}: <b>${movie.title}</b>\n\n🌍 ${movie.country} | 🗣 ${movie.language}\n💿 ${movie.quality} | ⏳ ${movie.duration}\n\n👁 ${movie.views} | ⭐️ ${rating}\n\n`;
-    if (movie.isAdult) caption += "🔞 <b>18+ SAHNALAR MAVJUD!</b>\n";
-    if (movie.contentType === 'series') caption += `📂 Jami qismlar: ${movie.episodes.length} ta\n👇 Quyidan qismni tanlang:`;
+        let caption = `${typeText}: <b>${movie.title}</b>\n\n🌍 ${movie.country} | 🗣 ${movie.language}\n💿 ${movie.quality} | ⏳ ${movie.duration}\n\n👁 ${movie.views} | ⭐️ ${rating}\n\n`;
+        if (movie.isAdult) caption += "🔞 <b>18+ SAHNALAR MAVJUD!</b>\n";
+        if (movie.contentType === 'series') caption += `📂 Jami qismlar: ${movie.episodes.length} ta\n👇 Quyidan qismni tanlang:`;
 
-    let markup;
-    if (movie.contentType === 'series') {
-        markup = generateSeriesKeyboard(movie, 0);
-    } else {
-        markup = {
-            inline_keyboard: [
-                [1, 2, 3, 4, 5].map(r => ({ text: `${r}⭐️`, callback_data: `rate_${movie.code}_${r}` })),
-                [{ text: `📥 Yuklab olish (${movie.quality})`, callback_data: `dl_${movie.code}` }]
-            ]
-        };
+        let markup;
+
+        if (movie.contentType === 'series') {
+            markup = generateSeriesKeyboard(movie, 0);
+        } else {
+            markup = {
+                inline_keyboard: [
+                    // Rating row
+                    [1, 2, 3, 4, 5].map(r => ({ text: `${r}⭐️`, callback_data: `rate_${movie.code}_${r}` })),
+                    // Download row
+                    [{ text: `📥 Yuklab olish (${movie.quality})`, callback_data: `dl_${movie.code}` }],
+                    // Share row
+                    [{ text: "♻️ Do'stlarga ulashish", url: `https://t.me/share/url?url=https://t.me/${BOT_USERNAME}?start=${movie.code}` }]
+                ]
+            };
+        }
+
+        if (movie.posterId) {
+            await bot.sendPhoto(chatId, movie.posterId, {
+                caption,
+                parse_mode: 'HTML',
+                reply_markup: markup
+            }).catch(err => console.error("SendPhoto Error:", err));
+        } else {
+            await safeSend(chatId, caption, { parse_mode: 'HTML', reply_markup: markup });
+        }
+    } catch (err) {
+        console.error("showMovieCard Error:", err);
+        await safeSend(chatId, "❌ <b>Xatolik yuz berdi.</b> Iltimos, keyinroq urinib ko‘ring.", { parse_mode: 'HTML' });
     }
-
-    if (movie.posterId) await bot.sendPhoto(chatId, movie.posterId, { caption, parse_mode: 'HTML', reply_markup: markup }).catch(() => { });
-    else await safeSend(chatId, caption, { parse_mode: 'HTML', reply_markup: markup });
 }
+
 
 function showAdminPanel(chatId, msgId = null) {
     isUserAdmin(chatId).then(isAdmin => {
